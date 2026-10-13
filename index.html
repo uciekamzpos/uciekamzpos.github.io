@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#01d2d4">
+    <title>Uciekam z POS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        :root { --iqos-cyan: #01d2d4; --black: #050505; --muted: #666; --red: #d92822; }
+        body {
+            background: var(--iqos-cyan); color: var(--black);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 24px 20px calc(32px + env(safe-area-inset-bottom));
+            min-height: 100vh;
+        }
+        main { width: 100%; max-width: 760px; margin: 0 auto; }
+        h1 { font-size: 24px; font-weight: 850; margin-bottom: 26px; text-transform: uppercase; letter-spacing: -.5px; }
+        .control-group { margin-bottom: 24px; }
+        .control-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 11px; font-weight: 750; font-size: 13px; }
+        .control-value { font-size: 19px; font-weight: 900; white-space: nowrap; }
+        input[type="range"] { appearance: none; -webkit-appearance: none; width: 100%; background: transparent; display: block; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%; background: #000; cursor: pointer; margin-top: -10px; }
+        input[type="range"]::-moz-range-thumb { height: 24px; width: 24px; border: 0; border-radius: 50%; background: #000; cursor: pointer; }
+        input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: #fff; border-radius: 2px; }
+        input[type="range"]::-moz-range-track { height: 4px; background: #fff; border-radius: 2px; }
+        input[type="range"]:focus-visible { outline: 2px solid #000; outline-offset: 8px; }
+        .checkbox-wrapper { display: flex; align-items: center; margin: 28px 0; cursor: pointer; font-weight: 650; font-size: 14px; line-height: 1.4; }
+        .checkbox-wrapper input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+        .custom-checkbox { flex: 0 0 22px; width: 22px; height: 22px; border: 2px solid #000; border-radius: 4px; margin-right: 12px; display: flex; align-items: center; justify-content: center; transition: .2s; }
+        .checkbox-wrapper input:checked + .custom-checkbox { background: #000; }
+        .checkbox-wrapper input:checked + .custom-checkbox::after { content: ''; width: 5px; height: 10px; border: solid var(--iqos-cyan); border-width: 0 2px 2px 0; transform: rotate(45deg); margin-top: -2px; }
+        .checkbox-wrapper input:focus-visible + .custom-checkbox { outline: 2px solid #fff; outline-offset: 3px; }
+        .btn-main { width: 100%; background: #000; color: #fff; border: 0; padding: 16px; font-size: 14px; font-weight: 850; border-radius: 8px; text-transform: uppercase; letter-spacing: .8px; cursor: pointer; transition: opacity .2s; margin-bottom: 18px; }
+        .btn-main:active { opacity: .75; }
+        .btn-main:disabled { opacity: .6; cursor: wait; }
+        .hint { font-size: 12px; line-height: 1.45; color: #163334; margin: 0 0 24px; }
+        .status { display: none; margin: 0 0 22px; border-radius: 8px; background: rgba(255,255,255,.88); padding: 12px 14px; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+        .status.visible { display: block; }
+        .status.error { border-left: 4px solid var(--red); }
+        .status.success { border-left: 4px solid #008d60; }
+        .status.loading { border-left: 4px solid #000; }
+        #schedule-container { display: none; scroll-margin-top: 16px; }
+        .schedule-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+        .schedule-title { font-size: 16px; font-weight: 850; text-transform: uppercase; letter-spacing: .7px; }
+        .result-count { font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .segment { background: #fff; border-radius: 10px; padding: 15px 16px 14px; margin-bottom: 12px; box-shadow: 0 2px 0 rgba(0,0,0,.04); }
+        .segment-row-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .time-range { font-size: 15px; font-weight: 850; white-space: nowrap; }
+        .score-box { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; padding: 5px 9px; border: 2px solid #000; border-radius: 7px; line-height: 1; }
+        .score-label { font-size: 9px; font-weight: 850; letter-spacing: .7px; margin-right: 3px; }
+        .score-number { font-size: 22px; font-weight: 950; font-variant-numeric: tabular-nums; }
+        .score-max { font-size: 10px; color: #666; font-weight: 750; }
+        .store-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+        .store-info { display: flex; align-items: center; min-width: 0; font-size: 15px; font-weight: 800; }
+        .store-type-icon { flex: 0 0 auto; font-size: 11px; padding: 3px 7px; border-radius: 4px; margin-right: 8px; font-weight: 950; }
+        .icon-zabka { background: #00a650; color: #fff; }
+        .icon-biedronka { background: #e3000f; color: #ffeb00; }
+        .icon-other { background: #222; color: #fff; }
+        .store-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .store-id { color: #858585; font-weight: 500; font-size: 11px; white-space: nowrap; margin-left: 8px; }
+        .score-track { height: 5px; width: 100%; background: #e9e9e9; border-radius: 10px; overflow: hidden; margin: 12px 0; }
+        .score-fill { height: 100%; background: var(--iqos-cyan); border-radius: 10px; }
+        .segment-row-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: #555; }
+        .address-dist { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+        .distance { color: #111; font-weight: 850; white-space: nowrap; }
+        .actions { display: flex; align-items: center; gap: 15px; white-space: nowrap; }
+        .action-link { font-weight: 800; text-decoration: none; color: #000; }
+        .action-link:focus-visible, .action-btn:focus-visible { outline: 2px solid var(--iqos-cyan); outline-offset: 3px; }
+        .action-btn { background: none; border: none; font-weight: 850; font-size: 12px; color: var(--red); cursor: pointer; }
+        .action-btn:disabled { opacity: .5; cursor: wait; }
+        .empty-state { background: rgba(255,255,255,.86); border-radius: 10px; padding: 18px; font-size: 14px; line-height: 1.5; }
+        .footer-note { margin-top: 18px; font-size: 11px; color: #163334; line-height: 1.45; }
+        @media (max-width: 420px) {
+            body { padding-left: 14px; padding-right: 14px; }
+            .segment { padding: 13px 12px; }
+            .segment-row-bottom { align-items: flex-start; }
+            .actions { gap: 11px; }
+            .score-label { display: none; }
+            .store-info { font-size: 14px; }
+            .store-id { margin-left: 5px; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Uciekam z POS</h1>
+
+    <section id="settings-panel" aria-label="Ustawienia grafiku">
+        <div class="control-group">
+            <div class="control-header">
+                <label for="radius-slider">PROMIEŃ WYSZUKIWANIA (m)</label>
+                <span class="control-value" id="radius-val">800</span>
+            </div>
+            <input type="range" id="radius-slider" min="100" max="1600" step="100" value="800">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <label for="hours-slider">POZOSTAŁY CZAS PRACY (h)</label>
+                <span class="control-value" id="hours-val">6</span>
+            </div>
+            <input type="range" id="hours-slider" min="1" max="12" step="1" value="6">
+        </div>
+
+        <label class="checkbox-wrapper" for="exclude-current">
+            <input type="checkbox" id="exclude-current" checked>
+            <span class="custom-checkbox" aria-hidden="true"></span>
+            <span>Wyklucz POS, w którym aktualnie się znajduję</span>
+        </label>
+
+        <button class="btn-main" id="opt-btn" type="button">OPTYMALIZUJ DLA OBECNEJ LOKALIZACJI</button>
+        <p class="hint">Wymagane jest zezwolenie na lokalizację GPS. Wykluczenia przyciskami na kartach są tymczasowe i znikają po odświeżeniu strony.</p>
+    </section>
+
+    <div id="status-message" class="status" role="status" aria-live="polite"></div>
+
+    <section id="schedule-container" aria-label="Rekomendowany grafik">
+        <div class="schedule-heading">
+            <h2 class="schedule-title">Rekomendowany grafik</h2>
+            <span class="result-count" id="result-count"></span>
+        </div>
+        <div id="schedule-list"></div>
+        <p class="footer-note" id="exclusion-note"></p>
+    </section>
+</main>
+
+<script>
+(() => {
+    // Endpointy z Twojego hostingu. Jeśli pliki PHP trafią pod inną domenę,
+    // zmień tylko tę stałą.
+    const API_BASE_URL = 'https://applicationprogramminginterface.beauty/uciekamzpos/';
+    const manualExcludedStores = new Set(); // celowo bez localStorage/sessionStorage
+
+    const radiusSlider = document.getElementById('radius-slider');
+    const hoursSlider = document.getElementById('hours-slider');
+    const radiusValue = document.getElementById('radius-val');
+    const hoursValue = document.getElementById('hours-val');
+    const excludeCurrentCheckbox = document.getElementById('exclude-current');
+    const mainButton = document.getElementById('opt-btn');
+    const statusBox = document.getElementById('status-message');
+    const scheduleContainer = document.getElementById('schedule-container');
+    const scheduleList = document.getElementById('schedule-list');
+    const resultCount = document.getElementById('result-count');
+    const exclusionNote = document.getElementById('exclusion-note');
+
+    let isLoading = false;
+
+    radiusSlider.addEventListener('input', () => { radiusValue.textContent = radiusSlider.value; });
+    hoursSlider.addEventListener('input', () => { hoursValue.textContent = hoursSlider.value; });
+    mainButton.addEventListener('click', () => generateSchedule());
+
+    function setStatus(message, type = 'loading') {
+        statusBox.textContent = message;
+        statusBox.className = `status visible ${type}`;
+    }
+
+    function endpointUrl(filename, params) {
+        const url = new URL(filename, API_BASE_URL);
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+        }
+        return url.toString();
+    }
+
+    async function fetchJson(url) {
+        const genericMessage = 'Wystąpił błąd. Spróbuj odświeżyć stronę lub ponowić próbę później.';
+        let response;
+        try {
+            response = await fetch(url, { method: 'GET', cache: 'no-store' });
+        } catch (_) {
+            throw new Error(genericMessage);
+        }
+
+        let data;
+        try {
+            data = await response.json();
+        } catch (_) {
+            throw new Error(genericMessage);
+        }
+
+        // To normalny stan biznesowy, a nie awaria API: nie ma otwartego POS-u
+        // z dodatnim sygnałem ruchu w analizowanym przedziale godzin.
+        if (data && typeof data.error === 'string') {
+            if (/nie znaleziono otwartego POS-u z dodatnim sygnałem ruchu/i.test(data.error)) {
+                const error = new Error('Brak otwartych POS-ów do zaproponowania w wybranym zakresie godzin. Spróbuj zmienić liczbę godzin lub promień wyszukiwania.');
+                error.userMessage = error.message;
+                error.kind = 'no-open-pos';
+                throw error;
+            }
+            throw new Error(genericMessage);
+        }
+
+        if (!response.ok) {
+            throw new Error(genericMessage);
+        }
+        return data;
+    }
+
+    async function acquireFreshLocation() {
+        if (!('geolocation' in navigator)) {
+            throw new Error('Ta przeglądarka nie udostępnia lokalizacji GPS.');
+        }
+
+        // Sprawdzamy stan uprawnienia. Gdy ma wartość "prompt", wywołanie
+        // getCurrentPosition poniżej może pokazać okno zgody. Jeśli użytkownik
+        // wcześniej zablokował lokalizację, strona nie może wymusić ponownego
+        // okna — przeglądarka wymaga zmiany uprawnienia w ustawieniach witryny.
+        if (navigator.permissions && navigator.permissions.query) {
+            try {
+                const permission = await navigator.permissions.query({ name: 'geolocation' });
+                if (permission.state === 'denied') {
+                    const error = new Error('Lokalizacja jest zablokowana dla tej strony.');
+                    error.code = 1;
+                    error.permissionPreviouslyDenied = true;
+                    throw error;
+                }
+            } catch (error) {
+                // Niektóre przeglądarki nie obsługują poprawnie query dla geolocation.
+                // Nasz własny błąd blokady przekazujemy dalej, inne błędy ignorujemy
+                // i próbujemy normalnie pobrać pozycję.
+                if (error && error.permissionPreviouslyDenied) throw error;
+            }
+        }
+
+        return new Promise((resolve, reject) => {
+            // Wywoływane przy każdym kliknięciu. Jeśli przeglądarka nie ma zapisanej
+            // odmowy, powinna poprosić użytkownika o zgodę, gdy jest ona potrzebna.
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 20000,
+                maximumAge: 0
+            });
+        });
+    }
+
+    function geolocationErrorMessage(error) {
+        if (error && typeof error.code === 'number') {
+            if (error.code === 1) return 'Wymagane jest zezwolenie na lokalizację GPS.';
+            if (error.code === 2) return 'Nie udało się ustalić lokalizacji. Spróbuj ponownie.';
+            if (error.code === 3) return 'Nie udało się pobrać lokalizacji na czas. Spróbuj ponownie.';
+        }
+        return 'Wystąpił błąd. Spróbuj odświeżyć stronę lub ponowić próbę później.';
+    }
+
+    async function detectCurrentStore(lat, lng) {
+        const url = endpointUrl('get_current.php', { lat, lng, tolerance: 30 });
+        const data = await fetchJson(url);
+        if (data && data.status === 'success' && data.data && data.data.storeId) {
+            return { storeId: String(data.data.storeId), storeType: data.data.storeType || '' };
+        }
+        if (data && data.status === 'not_found') return null;
+        throw new Error('Nie udało się zaktualizować grafiku. Spróbuj ponownie za chwilę.');
+    }
+
+    function setLoading(loading) {
+        isLoading = loading;
+        mainButton.disabled = loading;
+        mainButton.textContent = loading ? 'POBIERANIE GPS…' : 'OPTYMALIZUJ DLA OBECNEJ LOKALIZACJI';
+        document.querySelectorAll('.action-btn').forEach(button => { button.disabled = loading; });
+        radiusSlider.disabled = loading;
+        hoursSlider.disabled = loading;
+        excludeCurrentCheckbox.disabled = loading;
+    }
+
+    async function generateSchedule() {
+        if (isLoading) return;
+        setLoading(true);
+        setStatus('Pobieram aktualną lokalizację GPS…', 'loading');
+
+        try {
+            // Przy każdym odświeżeniu grafiku pytamy przeglądarkę o świeżą pozycję.
+            const position = await acquireFreshLocation();
+            const lat = position.coords.latitude.toFixed(7);
+            const lng = position.coords.longitude.toFixed(7);
+            const gpsAccuracyMeters = Number.isFinite(position.coords.accuracy)
+                ? Math.round(position.coords.accuracy)
+                : null;
+            const gpsDetails = gpsAccuracyMeters !== null
+                ? `dokładność pomiaru: ${gpsAccuracyMeters} m, tolerancja: 30 m`
+                : 'tolerancja: 30 m';
+
+            const excludedIds = new Set(manualExcludedStores);
+            let currentStore = null;
+            if (excludeCurrentCheckbox.checked) {
+                setStatus('Sprawdzam bieżący POS…', 'loading');
+                currentStore = await detectCurrentStore(lat, lng);
+                if (currentStore) excludedIds.add(currentStore.storeId);
+            }
+
+            const params = {
+                lat,
+                lng,
+                radius: radiusSlider.value,
+                hours: hoursSlider.value
+            };
+            if (excludedIds.size > 0) params.exclude = Array.from(excludedIds).join(',');
+
+            setStatus('Układam grafik…', 'loading');
+            const data = await fetchJson(endpointUrl('get_schedule.php', params));
+            if (!Array.isArray(data)) {
+                throw new Error('Wystąpił błąd. Spróbuj odświeżyć stronę lub ponowić próbę później.');
+            }
+            renderSchedule(data);
+
+            const details = [];
+            if (excludeCurrentCheckbox.checked) {
+                details.push(currentStore
+                    ? `Pominięto bieżący POS ${currentStore.storeId} (${gpsDetails}).`
+                    : `Nie wykryto POS w bieżącej lokalizacji (${gpsDetails}).`);
+            }
+            if (manualExcludedStores.size > 0) details.push(`Pominięto ręcznie wykluczone POS: ${manualExcludedStores.size}.`);
+            setStatus(`Grafik zaktualizowany.${details.length ? ' ' + details.join(' ') : ''}`, 'success');
+
+            if (scheduleContainer.style.display !== 'none') {
+                scheduleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } catch (error) {
+            const message = error && typeof error.code === 'number'
+                ? geolocationErrorMessage(error)
+                : (error && error.userMessage)
+                    ? error.userMessage
+                    : 'Wystąpił błąd. Spróbuj odświeżyć stronę lub ponowić próbę później.';
+            // Nie zostawiamy starego grafiku na ekranie po nieudanej aktualizacji,
+            // zwłaszcza gdy użytkownik właśnie wykluczył jeden ze sklepów.
+            scheduleList.replaceChildren();
+            scheduleContainer.style.display = 'none';
+            resultCount.textContent = '';
+            setStatus(message, 'error');
+        } finally {
+            setLoading(false);
+            updateExclusionNote();
+        }
+    }
+
+    function createElement(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined && text !== null) element.textContent = String(text);
+        return element;
+    }
+
+    function getStoreIcon(storeType) {
+        const value = String(storeType || '').toLocaleLowerCase('pl-PL');
+        if (value.includes('biedronka')) return { label: 'B', className: 'icon-biedronka' };
+        if (value.includes('żabka') || value.includes('zabka')) return { label: 'Ż', className: 'icon-zabka' };
+        return { label: String(storeType || 'S').trim().charAt(0).toUpperCase() || 'S', className: 'icon-other' };
+    }
+
+    function safeMapsUrl(item) {
+        const candidate = String(item.googleMapsLink || '');
+        try {
+            const parsed = new URL(candidate);
+            if (parsed.protocol === 'https:' && (parsed.hostname === 'www.google.com' || parsed.hostname === 'maps.google.com')) {
+                return parsed.href;
+            }
+        } catch (error) { /* brak poprawnego linku — ukryjemy link nawigacji */ }
+        return null;
+    }
+
+    function renderSchedule(schedule) {
+        scheduleList.replaceChildren();
+        scheduleContainer.style.display = 'block';
+        resultCount.textContent = `${schedule.length} POS`;
+
+        if (schedule.length === 0) {
+            scheduleList.appendChild(createElement('div', 'empty-state', 'Nie udało się przygotować grafiku dla tych ustawień. Zwiększ promień lub zmniejsz liczbę godzin i spróbuj ponownie.'));
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        for (const item of schedule) {
+            const storeId = String(item.storeId || '');
+            const storeType = String(item.storeType || 'Punkt sprzedaży');
+            const scoreNumber = Number(item.score);
+            const hasScore = Number.isFinite(scoreNumber);
+            const score = hasScore ? Math.max(0, Math.min(100, Math.round(scoreNumber))) : null;
+            const distanceNumber = Number(item.distanceMeters);
+            const hasDistance = item.distanceMeters !== undefined && item.distanceMeters !== null && Number.isFinite(distanceNumber);
+
+            const card = createElement('article', 'segment');
+            const top = createElement('div', 'segment-row-top');
+            top.appendChild(createElement('div', 'time-range', item.timeSlot || 'Przedział bez godziny'));
+            const scoreBox = createElement('div', 'score-box');
+            scoreBox.appendChild(createElement('span', 'score-label', 'PUNKTACJA'));
+            scoreBox.appendChild(createElement('strong', 'score-number', hasScore ? score : '—'));
+            scoreBox.appendChild(createElement('span', 'score-max', '/100'));
+            scoreBox.setAttribute('aria-label', hasScore ? `Punktacja ${score} na 100` : 'Brak punktacji');
+            top.appendChild(scoreBox);
+            card.appendChild(top);
+
+            const titleRow = createElement('div', 'store-title-row');
+            const storeInfo = createElement('div', 'store-info');
+            const iconInfo = getStoreIcon(storeType);
+            storeInfo.appendChild(createElement('span', `store-type-icon ${iconInfo.className}`, iconInfo.label));
+            storeInfo.appendChild(createElement('span', 'store-name', storeType));
+            titleRow.appendChild(storeInfo);
+            titleRow.appendChild(createElement('span', 'store-id', storeId ? `#${storeId}` : ''));
+            card.appendChild(titleRow);
+
+            const track = createElement('div', 'score-track');
+            track.setAttribute('aria-hidden', 'true');
+            const fill = createElement('div', 'score-fill');
+            fill.style.width = `${hasScore ? score : 0}%`;
+            track.appendChild(fill);
+            card.appendChild(track);
+
+            const bottom = createElement('div', 'segment-row-bottom');
+            const locationText = createElement('div', 'address-dist');
+            locationText.appendChild(document.createTextNode(String(item.address || 'Brak adresu')));
+            if (hasDistance) {
+                locationText.appendChild(document.createTextNode(' · '));
+                locationText.appendChild(createElement('strong', 'distance', `${Math.round(distanceNumber)} m`));
+            }
+            bottom.appendChild(locationText);
+
+            const actions = createElement('div', 'actions');
+            const mapsUrl = safeMapsUrl(item);
+            if (mapsUrl) {
+                const mapLink = createElement('a', 'action-link', 'Nawiguj');
+                mapLink.href = mapsUrl;
+                mapLink.target = '_blank';
+                mapLink.rel = 'noopener noreferrer';
+                actions.appendChild(mapLink);
+            }
+            if (storeId) {
+                const excludeButton = createElement('button', 'action-btn', 'Wyklucz');
+                excludeButton.type = 'button';
+                excludeButton.title = `Wyklucz POS ${storeId} i pobierz nowy grafik`;
+                excludeButton.addEventListener('click', () => excludeStore(storeId));
+                actions.appendChild(excludeButton);
+            }
+            bottom.appendChild(actions);
+            card.appendChild(bottom);
+            fragment.appendChild(card);
+        }
+        scheduleList.appendChild(fragment);
+    }
+
+    async function excludeStore(storeId) {
+        if (!storeId || isLoading) return;
+        manualExcludedStores.add(String(storeId));
+        updateExclusionNote();
+        setStatus(`Wykluczono POS ${storeId}. Aktualizuję grafik…`, 'loading');
+        await generateSchedule();
+    }
+
+    function updateExclusionNote() {
+        const count = manualExcludedStores.size;
+        exclusionNote.textContent = count > 0
+            ? `Tymczasowo wykluczone POS-y: ${Array.from(manualExcludedStores).join(', ')}. Lista wyczyści się po odświeżeniu strony.`
+            : 'Ręczne wykluczenia są tymczasowe i znikną po odświeżeniu strony.';
+    }
+
+    updateExclusionNote();
+})();
+</script>
+</body>
+</html>
