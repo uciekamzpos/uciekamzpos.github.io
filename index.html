@@ -198,6 +198,14 @@
             throw new Error(genericMessage);
         }
 
+        // Niedzielna optymalizacja jest celowo wyłączona przez backend.
+        if (data && data.code === 'sunday_optimization_unavailable') {
+            const error = new Error(data.message || 'Optymalizacja grafiku w niedzielę jest niedostępna. Spróbuj ponownie w inny dzień.');
+            error.userMessage = error.message;
+            error.kind = 'sunday-unavailable';
+            throw error;
+        }
+
         // To normalny stan biznesowy, a nie awaria API: nie ma otwartego POS-u
         // z dodatnim sygnałem ruchu w analizowanym przedziale godzin.
         if (data && typeof data.error === 'string') {
@@ -352,7 +360,7 @@
             scheduleContainer.style.display = 'none';
             resultCount.textContent = '';
             rejectedCount.textContent = '';
-            setStatus(message, 'error');
+            setStatus(message, error && error.kind === 'sunday-unavailable' ? 'warning' : 'error');
         } finally {
             setLoading(false);
             updateExclusionNote();
