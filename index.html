@@ -77,9 +77,6 @@
         .rejected-intro { font-size: 11px; line-height: 1.45; color: #3d4a47; margin-bottom: 12px; }
         .segment.rejected-segment { background: #f3f5f1; border: 1px solid #d7ddd4; box-shadow: none; }
         .rejected-tag { display: inline-flex; align-items: center; border-radius: 4px; padding: 4px 6px; background: #e2e7df; color: #536052; font-size: 9px; font-weight: 850; letter-spacing: .45px; }
-        .rejection-reason { color: #59645b; font-size: 11px; line-height: 1.4; margin-top: 8px; }
-        .potential-score { border-color: #9aa49a; color: #4f5c50; }
-        .potential-score .score-number { font-size: 19px; }
         .footer-note { margin-top: 18px; font-size: 11px; color: #163334; line-height: 1.45; }
         @media (max-width: 420px) {
             body { padding-left: 14px; padding-right: 14px; }
@@ -130,13 +127,14 @@
             <h2 class="schedule-title">Rekomendowany grafik</h2>
             <span class="result-count" id="result-count"></span>
         </div>
+        <p class="rejected-intro score-explainer">Punktacja opisuje przewidywaną atrakcyjność POS-u w konkretnych godzinach, niezależnie od bonusu za pozostanie i kosztu zmiany lokalizacji.</p>
         <div id="schedule-list"></div>
         <section id="rejected-container" class="rejected-container" style="display:none" aria-label="POS-y nieuwzględnione w grafiku">
             <div class="rejected-heading">
                 <h3 class="rejected-title">POS-y nieuwzględnione w grafiku</h3>
                 <span class="result-count" id="rejected-count"></span>
             </div>
-            <p class="rejected-intro">Punkty w zasięgu wyszukiwania, które nie weszły do rekomendowanego grafiku. Powód pominięcia jest widoczny na każdej karcie.</p>
+            <p class="rejected-intro">Wszystkie POS-y w zadanym promieniu, które nie znalazły się w rekomendowanym grafiku.</p>
             <div id="rejected-list"></div>
         </section>
         <p class="footer-note" id="exclusion-note"></p>
@@ -475,24 +473,14 @@
         for (const item of rejected) {
             const storeId = String(item.storeId || '');
             const storeType = String(item.storeType || 'Punkt sprzedaży');
-            const potentialNumber = item.potentialScore === null || item.potentialScore === undefined
-                ? null : Number(item.potentialScore);
-            const hasPotential = potentialNumber !== null && Number.isFinite(potentialNumber);
-            const potential = hasPotential ? Math.max(0, Math.min(100, Math.round(potentialNumber))) : null;
             const distanceNumber = Number(item.distanceMeters);
-            const hasDistance = item.distanceMeters !== undefined && item.distanceMeters !== null && Number.isFinite(distanceNumber);
+            const hasDistance = item.distanceMeters !== undefined
+                && item.distanceMeters !== null
+                && Number.isFinite(distanceNumber);
 
             const card = createElement('article', 'segment rejected-segment');
             const top = createElement('div', 'segment-row-top');
-            const leftTop = createElement('div', 'store-info');
-            leftTop.appendChild(createElement('span', 'rejected-tag', 'POZA GRAFIKIEM'));
-            top.appendChild(leftTop);
-
-            const scoreBox = createElement('div', 'score-box potential-score');
-            scoreBox.appendChild(createElement('span', 'score-label', 'POTENCJAŁ'));
-            scoreBox.appendChild(createElement('strong', 'score-number', hasPotential ? potential : '—'));
-            scoreBox.appendChild(createElement('span', 'score-max', hasPotential ? '/100' : ''));
-            top.appendChild(scoreBox);
+            top.appendChild(createElement('span', 'rejected-tag', 'NIE W GRAFIKU'));
             card.appendChild(top);
 
             const titleRow = createElement('div', 'store-title-row');
@@ -504,9 +492,6 @@
             titleRow.appendChild(createElement('span', 'store-id', storeId ? `#${storeId}` : ''));
             card.appendChild(titleRow);
 
-            const reason = createElement('p', 'rejection-reason', item.reasonLabel || 'Nie został wybrany do grafiku.');
-            card.appendChild(reason);
-
             const bottom = createElement('div', 'segment-row-bottom');
             const locationText = createElement('div', 'address-dist');
             locationText.appendChild(document.createTextNode(String(item.address || 'Brak adresu')));
@@ -515,6 +500,7 @@
                 locationText.appendChild(createElement('strong', 'distance', `${Math.round(distanceNumber)} m`));
             }
             bottom.appendChild(locationText);
+
             const actions = createElement('div', 'actions');
             const mapsUrl = safeMapsUrl(item);
             if (mapsUrl) {
