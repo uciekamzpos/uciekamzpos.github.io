@@ -70,6 +70,16 @@
         .action-btn { background: none; border: none; font-weight: 850; font-size: 12px; color: var(--red); cursor: pointer; }
         .action-btn:disabled { opacity: .5; cursor: wait; }
         .empty-state { background: rgba(255,255,255,.86); border-radius: 10px; padding: 18px; font-size: 14px; line-height: 1.5; }
+        .status.warning { border-left: 4px solid #8b7b45; }
+        .rejected-container { margin-top: 26px; }
+        .rejected-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+        .rejected-title { font-size: 13px; font-weight: 850; text-transform: uppercase; letter-spacing: .55px; }
+        .rejected-intro { font-size: 11px; line-height: 1.45; color: #3d4a47; margin-bottom: 12px; }
+        .segment.rejected-segment { background: #f3f5f1; border: 1px solid #d7ddd4; box-shadow: none; }
+        .rejected-tag { display: inline-flex; align-items: center; border-radius: 4px; padding: 4px 6px; background: #e2e7df; color: #536052; font-size: 9px; font-weight: 850; letter-spacing: .45px; }
+        .rejection-reason { color: #59645b; font-size: 11px; line-height: 1.4; margin-top: 8px; }
+        .potential-score { border-color: #9aa49a; color: #4f5c50; }
+        .potential-score .score-number { font-size: 19px; }
         .footer-note { margin-top: 18px; font-size: 11px; color: #163334; line-height: 1.45; }
         @media (max-width: 420px) {
             body { padding-left: 14px; padding-right: 14px; }
@@ -121,6 +131,14 @@
             <span class="result-count" id="result-count"></span>
         </div>
         <div id="schedule-list"></div>
+        <section id="rejected-container" class="rejected-container" style="display:none" aria-label="POS-y nieuwzględnione w grafiku">
+            <div class="rejected-heading">
+                <h3 class="rejected-title">POS-y nieuwzględnione w grafiku</h3>
+                <span class="result-count" id="rejected-count"></span>
+            </div>
+            <p class="rejected-intro">Punkty w zasięgu wyszukiwania, które nie weszły do rekomendowanego grafiku. Powód pominięcia jest widoczny na każdej karcie.</p>
+            <div id="rejected-list"></div>
+        </section>
         <p class="footer-note" id="exclusion-note"></p>
     </section>
 </main>
@@ -142,6 +160,9 @@
     const scheduleContainer = document.getElementById('schedule-container');
     const scheduleList = document.getElementById('schedule-list');
     const resultCount = document.getElementById('result-count');
+    const rejectedContainer = document.getElementById('rejected-container');
+    const rejectedList = document.getElementById('rejected-list');
+    const rejectedCount = document.getElementById('rejected-count');
     const exclusionNote = document.getElementById('exclusion-note');
 
     let isLoading = false;
@@ -298,10 +319,11 @@
 
             setStatus('Układam grafik…', 'loading');
             const data = await fetchJson(endpointUrl('get_schedule.php', params));
-            if (!Array.isArray(data)) {
+            if (!data || !Array.isArray(data.schedule) || !Array.isArray(data.rejected)) {
                 throw new Error('Wystąpił błąd. Spróbuj odświeżyć stronę lub ponowić próbę później.');
             }
-            renderSchedule(data);
+            renderSchedule(data.schedule);
+            renderRejected(data.rejected);
 
             const details = [];
             if (excludeCurrentCheckbox.checked) {
@@ -310,7 +332,10 @@
                     : `Nie wykryto POS w bieżącej lokalizacji (${gpsDetails}).`);
             }
             if (manualExcludedStores.size > 0) details.push(`Pominięto ręcznie wykluczone POS: ${manualExcludedStores.size}.`);
-            setStatus(`Grafik zaktualizowany.${details.length ? ' ' + details.join(' ') : ''}`, 'success');
+            const statusText = data.schedule.length > 0
+                ? `Grafik zaktualizowany.${details.length ? ' ' + details.join(' ') : ''}`
+                : `${data.message || 'Nie znaleziono POS-ów do zaproponowania.'}${details.length ? ' ' + details.join(' ') : ''}`;
+            setStatus(statusText, data.schedule.length > 0 ? 'success' : 'warning');
 
             if (scheduleContainer.style.display !== 'none') {
                 scheduleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -324,8 +349,11 @@
             // Nie zostawiamy starego grafiku na ekranie po nieudanej aktualizacji,
             // zwłaszcza gdy użytkownik właśnie wykluczył jeden ze sklepów.
             scheduleList.replaceChildren();
+            rejectedList.replaceChildren();
+            rejectedContainer.style.display = 'none';
             scheduleContainer.style.display = 'none';
             resultCount.textContent = '';
+            rejectedCount.textContent = '';
             setStatus(message, 'error');
         } finally {
             setLoading(false);
@@ -364,7 +392,7 @@
         resultCount.textContent = `${schedule.length} POS`;
 
         if (schedule.length === 0) {
-            scheduleList.appendChild(createElement('div', 'empty-state', 'Nie udało się przygotować grafiku dla tych ustawień. Zwiększ promień lub zmniejsz liczbę godzin i spróbuj ponownie.'));
+            scheduleList.appendChild(createElement('div', 'empty-state', 'Brak POS-ów spełniających kryteria grafiku dla tych ustawień. Poniżej możesz sprawdzić punkty nieuwzględnione przez algorytm.'));
             return;
         }
 
@@ -435,6 +463,72 @@
             fragment.appendChild(card);
         }
         scheduleList.appendChild(fragment);
+    }
+
+    function renderRejected(rejected) {
+        rejectedList.replaceChildren();
+        rejectedCount.textContent = `${rejected.length} POS`;
+        rejectedContainer.style.display = rejected.length > 0 ? 'block' : 'none';
+        if (rejected.length === 0) return;
+
+        const fragment = document.createDocumentFragment();
+        for (const item of rejected) {
+            const storeId = String(item.storeId || '');
+            const storeType = String(item.storeType || 'Punkt sprzedaży');
+            const potentialNumber = item.potentialScore === null || item.potentialScore === undefined
+                ? null : Number(item.potentialScore);
+            const hasPotential = potentialNumber !== null && Number.isFinite(potentialNumber);
+            const potential = hasPotential ? Math.max(0, Math.min(100, Math.round(potentialNumber))) : null;
+            const distanceNumber = Number(item.distanceMeters);
+            const hasDistance = item.distanceMeters !== undefined && item.distanceMeters !== null && Number.isFinite(distanceNumber);
+
+            const card = createElement('article', 'segment rejected-segment');
+            const top = createElement('div', 'segment-row-top');
+            const leftTop = createElement('div', 'store-info');
+            leftTop.appendChild(createElement('span', 'rejected-tag', 'POZA GRAFIKIEM'));
+            top.appendChild(leftTop);
+
+            const scoreBox = createElement('div', 'score-box potential-score');
+            scoreBox.appendChild(createElement('span', 'score-label', 'POTENCJAŁ'));
+            scoreBox.appendChild(createElement('strong', 'score-number', hasPotential ? potential : '—'));
+            scoreBox.appendChild(createElement('span', 'score-max', hasPotential ? '/100' : ''));
+            top.appendChild(scoreBox);
+            card.appendChild(top);
+
+            const titleRow = createElement('div', 'store-title-row');
+            const storeInfo = createElement('div', 'store-info');
+            const iconInfo = getStoreIcon(storeType);
+            storeInfo.appendChild(createElement('span', `store-type-icon ${iconInfo.className}`, iconInfo.label));
+            storeInfo.appendChild(createElement('span', 'store-name', storeType));
+            titleRow.appendChild(storeInfo);
+            titleRow.appendChild(createElement('span', 'store-id', storeId ? `#${storeId}` : ''));
+            card.appendChild(titleRow);
+
+            const reason = createElement('p', 'rejection-reason', item.reasonLabel || 'Nie został wybrany do grafiku.');
+            card.appendChild(reason);
+
+            const bottom = createElement('div', 'segment-row-bottom');
+            const locationText = createElement('div', 'address-dist');
+            locationText.appendChild(document.createTextNode(String(item.address || 'Brak adresu')));
+            if (hasDistance) {
+                locationText.appendChild(document.createTextNode(' · '));
+                locationText.appendChild(createElement('strong', 'distance', `${Math.round(distanceNumber)} m`));
+            }
+            bottom.appendChild(locationText);
+            const actions = createElement('div', 'actions');
+            const mapsUrl = safeMapsUrl(item);
+            if (mapsUrl) {
+                const mapLink = createElement('a', 'action-link', 'Nawiguj');
+                mapLink.href = mapsUrl;
+                mapLink.target = '_blank';
+                mapLink.rel = 'noopener noreferrer';
+                actions.appendChild(mapLink);
+            }
+            bottom.appendChild(actions);
+            card.appendChild(bottom);
+            fragment.appendChild(card);
+        }
+        rejectedList.appendChild(fragment);
     }
 
     async function excludeStore(storeId) {
